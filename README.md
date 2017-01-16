@@ -8,3 +8,4 @@ ocamlbuild -use-ocamlfind -pkgs "js_of_ocaml,js_of_ocaml.syntax" -use-menhir -sy
 
 js_of_ocaml +nat.js +weak.js grumpyjs.byte
 
+Then put grumpyjs.js in the scripts directory.

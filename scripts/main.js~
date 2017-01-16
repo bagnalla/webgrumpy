@@ -1,0 +1,72 @@
+var $ = require('jquery-browserify')
+
+function errorMsg(msg) {
+    $("#result").html(msg);
+}
+
+function createWorker() {
+    var worker = new Worker ("./scripts/grumpyjs.js");
+    worker.onmessage = function (m) {
+	if (typeof m.data == 'string') {
+            console.log("" + m.data);
+	} else {
+            console.log ("[ASYNCH] back from " + m.data.fname);
+            var handler = worker_handler[m.data.fname];
+            handler (m.data.result);
+	}
+    }
+    worker.onerror = function(event){
+	$("#result").text("Grumpy exception: " + event.message);
+    };
+    return worker;
+}
+
+var worker_handler = new Object ();
+var worker = createWorker();
+
+// taken from http://toss.sourceforge.net/ocaml.html
+function ASYNCH (action_name, action_args, cont) {
+    worker_handler[action_name] = cont;
+    worker.postMessage ({fname: action_name, args: action_args});
+    console.log ("[ASYNCH] " + action_name + " (" + action_args + ")");
+}
+
+function cancelWorker () {
+    worker.terminate();
+    worker = undefined;
+    worker = createWorker();
+}
+
+var timeoutId = null;
+function startTimeout() {
+    timeoutId = setTimeout(function() {
+	cancelWorker();
+	$("#result").text("Timed out after 30 seconds.");
+    }, 30000);
+}
+
+function cancelTimeout() {
+    if (timeoutId !== null) {
+	clearTimeout(timeoutId);
+	timeoutId = null;
+    }
+}
+
+function interpret () {
+    let editor = ace.edit("editor");
+    var txt = editor.getValue();
+    startTimeout();
+    ASYNCH ("interpret", [txt], function (response) {
+	cancelTimeout();
+	$("#result").html(response);
+    })
+}
+
+$("#gobutton").click(function() {
+    interpret();
+});
+
+let editor = ace.edit("editor");
+editor.setTheme("ace/theme/iplastic");
+editor.session.setMode("ace/mode/javascript");
+editor.session.setUseWorker(false);

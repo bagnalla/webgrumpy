@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8">
+    <title>Grumpy</title>
+    <style type="text/css" media="screen">
+      #editor {
+      position: relative !important;
+      top: 0;
+      border: 1px solid lightgray;
+      height: 420px;
+      width: 545px;
+      }
+      #results {
+      position: relative !important;
+      top: 0;
+      border: 1px solid lightgray;
+      height: 420px;
+      width: 545px;
+      }
+    </style>
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.1.1/jquery.min.js"></script>
+  </head>
+  <body>
+    <div id="content">
+      <h2>Grumpy</h2>
+      <table>
+	<tr>
+	  <td><pre id="editor"></pre></td>
+	  <td><pre id="results"></pre></td>
+	</tr>
+      </table>
+      <button type="button" id="gobutton">Go</button>
+      <script src="ace/ace.js" type="text/javascript" charset="utf-8"></script>
+      <script src="scripts/grumpyjs.js"></script>
+      <script src="scripts/bundle.js"></script>
+    </div>
+  </body>
+</html>

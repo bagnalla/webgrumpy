@@ -1,5 +1,3 @@
-var $ = require('jquery-browserify')
-
 function setResults(res) {
     let results = ace.edit("results");
     results.setValue(res);
@@ -57,7 +55,7 @@ function cancelTimeout() {
 
 function interpret () {
     startTimeout();
-    $("#gobutton").prop('disabled', true);
+    document.getElementById("gobutton").disabled = true; 
 
     setResults("Interpreting...");
 
@@ -66,14 +64,10 @@ function interpret () {
 
     ASYNCH ("interpret", [txt], function (response) {
 	cancelTimeout();
-	$("#gobutton").prop('disabled', false);
+	document.getElementById("gobutton").disabled = false; 
 	setResults(response);
     })
 }
-
-$("#gobutton").click(function() {
-    interpret();
-});
 
 let editor = ace.edit("editor");
 editor.setTheme("ace/theme/iplastic");

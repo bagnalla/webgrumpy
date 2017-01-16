@@ -1,12 +1,9 @@
 # webgrumpy
 CS4100 grumpy compiler web interface
 
-Install js_of_ocaml through opam then add this target to the makefile
+Install js_of_ocaml through opam, put the file grumpyjs.ml in the grumpy src
+directory, then use the following commands to build grumpyjs.js:
 
-js:
-	ocamlbuild -use-ocamlfind -pkgs "js_of_ocaml,js_of_ocaml.syntax" \
-	-use-menhir -syntax camlp4o grumpyjs.byte
-	js_of_ocaml +nat.js +weak.js grumpyjs.byte
+ocamlbuild -use-ocamlfind -pkgs "js_of_ocaml,js_of_ocaml.syntax" -use-menhir -syntax camlp4o grumpyjs.byte
+js_of_ocaml +nat.js +weak.js grumpyjs.byte
 
-and build the file grumpyjs.js with "make js". Then put grumpy.js in the
-scripts directory.

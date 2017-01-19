@@ -3,37 +3,218 @@
   <head>
     <meta charset="UTF-8">
     <title>Grumpy</title>
+    <link rel="stylesheet" type="text/css" href="styles/bootstrap.min.css">
+    <link rel="stylesheet" href="https://code.jquery.com/ui/1.12.1/themes/base/jquery-ui.css">
     <style type="text/css" media="screen">
+      /*#editor {
+      position: relative !important;
+      top: 0;
+      border: 1px solid lightgray;
+      height: 420px;
+      width: 545px;
+      }*/
+
       #editor {
       position: relative !important;
       top: 0;
       border: 1px solid lightgray;
+      margin-top: 0px;
       height: 420px;
       width: 545px;
+      z-index: 1;
+      margin-bottom: 0px;
+      padding-bottom: 0px;
+      border-bottom: groove;
       }
-      #results {
+      #output {
       position: relative !important;
       top: 0;
       border: 1px solid lightgray;
-      height: 420px;
-      width: 545px;
+      height: 100%;
+      /*width: 545px;*/
+      }
+
+      .fullwidth {
+      width: 100%;
+      margin-left: auto;
+      margin-right: auto;
+      }
+
+      h2 {
+      text-align: center;
+      }
+
+      .ui-state-active {
+      background: #606060 !important;
+      border-color: #909090 !important;
+      /*background: #909090 !important;*/
+      }
+
+      #content {
+      width: 100%;
+      text-align: left;
+      margin: auto;
+      }
+
+      #undereditor {
+      margin-top: 3px;
+      margin-left: 4px;
+      }
+
+      #feedback {
+      margin: auto;
+      margin-top: 10px;
+      font-size: 12px;
+      display: inline;
+      }
+
+      .myButton {
+      position: relative;
+      z-index: 3;
+      }
+
+      .plusminusbutton {
+      width: 20px;
+      margin-left: 1px;
+      margin-right: 1px;
+      }
+
+      table {
+      border: ridge;
+      border-width: 1px;
+      }
+
+      td {
+      vertical-align: top;
+      border: groove;
+      border-width: 1px;
+      }
+
+      footer {
+      margin-top: 10px;
+      bottom: 0px;
+      text-align: center;
+      }
+
+      .noborder {
+      border: none !important;
+      }
+
+      .tokenMarker {
+      position: absolute;
+      background: rgba(100,200,100,0.5);
+      z-index: 20
+      }
+
+      #outputtab {
+      padding-left: 0px;
       }
     </style>
-    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.1.1/jquery.min.js"></script>
+    <!-- <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.1.1/jquery.min.js"></script> -->
+    <script src="https://code.jquery.com/jquery-1.12.4.js"></script>
+    <script src="https://code.jquery.com/ui/1.12.1/jquery-ui.js"></script>
+    <script>
+      $( function() {
+      $( "#tabs" ).tabs();
+      } );
+    </script>
   </head>
   <body>
-    <div id="content">
+    <div id="content" class="container">
       <h2>Grumpy</h2>
-      <table>
-	<tr>
-	  <td><pre id="editor"></pre></td>
-	  <td><pre id="results"></pre></td>
-	</tr>
-      </table>
+
+      <div align="center">
+	<table class="noborder"><tr><td class="noborder">
+	      <button type="button" id="editorplusbutton"
+		      class="btn btn-xs plusminusbutton">+</button>
+	      <br>
+	      <button type="button" id="editorminusbutton"
+		      class="btn btn-xs plusminusbutton">-</button>
+	    </td><td class="noborder">
+	      <table id="maintable" border="1">
+		<tr>
+		  <td>
+		    <pre id="editor"></pre>
+		    <div id="undereditor">
+		      <button type="button" id="compilebutton"
+			      class="btn btn-primary myButton">Compile</button>
+		      <button type="button" id="cancelbutton"
+			      class="btn btn-danger myButton"><u>C</u>ancel</button>
+		      <!-- <button type="button" id="editbutton" -->
+		      <!-- 	      class="btn btn-default myButton"><u>E</u>dit</button> -->
+		      <div id="feedback"></div>
+		      <div class="checkbox">
+			<label><input type="checkbox" value="">Interpret</label>
+		      </div>
+		    </div>
+		  </td>
+		  <td></td>
+		  <td class="noborder">
+		    <table class="noborder">
+		      <tr>
+			<td class="noborder">
+			  <div id="tabs" class="noborder">
+			    <ul>
+			      <li><a id="outputtablink" href="#outputtab">Output</a></li>
+			      <li><a id="tokenstablink" href="#tokenstab">Tokens</a></li>
+			      <li><a href="#asttab">AST</a></li>
+			      <li><a href="#typingtab">Typing Derivation</a></li>
+			      <li><a href="#rtltab">RTL</a></li>
+			      <li><a href="#llvmtab">LLVM</a></li>
+			    </ul>
+			    <div id="outputtab">
+			      <table class="noborder">
+				<tr>
+				  <td class="noborder">
+				    <button type="button" id="outputplusbutton"
+					    class="btn btn-xs plusminusbutton">+</button>
+				    <br>
+				    <button type="button" id="outputminusbutton"
+					    class="btn btn-xs plusminusbutton">-</button>
+				  </td>
+				  <td class="noborder">
+				    <pre id="output"></pre>
+				  </td>
+				</tr>
+			      </table>
+			    </div>
+			    <div id="tokenstab">
+			      <canvas id="tokenscanvas" width="600" height="525"></canvas>
+			    </div>
+			    <div id="asttab">
+			      <canvas id="astcanvas" width="600" height="525"></canvas>
+			    </div>
+			    <div id="typingtab">
+			    </div>
+			    <div id="rtltab">
+			    </div>
+			    <div id="llvmtab">
+			    </div>
+			  </div>
+			</td>
+		      </tr>
+		    </table>
+		  </td>
+		</tr>
+	      </table>
+	    </td><!-- <td class="noborder"> -->
+	    <!--       <button type="button" id="canvasplusbutton" -->
+	    <!-- 	      class="btn btn-xs plusminusbutton">+</button> -->
+	    <!--       <br> -->
+	    <!--       <button type="button" id="canvasminusbutton" -->
+	    <!-- 	      class="btn btn-xs plusminusbutton">-</button> -->
+	    <!-- </td> --></tr></table>
+      </div>
+
       <script src="ace/ace.js" type="text/javascript" charset="utf-8"></script>
       <script src="scripts/grumpyjs.js"></script>
-      <script src="scripts/main.js"></script>
-      <button type="button" id="gobutton" onclick="interpret()">Go</button>
+      <script src="scripts/bundle.js"></script>
+
+      <footer>
+	<!-- <em> -->
+	<!--   <a href="about.html">About Grumpy</a> -->
+	<!-- </em> -->
+      </footer>
     </div>
   </body>
 </html>

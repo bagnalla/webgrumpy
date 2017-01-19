@@ -1,26 +1,14 @@
-open Batteries
 open BatFormat
-open BatOptParse
-
 open Lexing
 open AST
-open Exp       
 open Tycheck
 open Ssa
+open Grumpyjsutil
 
 let print_pos lexbuf =
   let pos = lexbuf.lex_curr_p in
   pos.pos_fname ^ " line " ^ (string_of_int pos.pos_lnum) ^
     " col " ^ (string_of_int (pos.pos_cnum - pos.pos_bol + 1))
-
-let string_of_id = function Id s -> s
-
-let string_of_value = function
-  | VInt i -> Int32.to_string i
-  | VFloat f -> string_of_float f
-  | VUnit -> "unit"
-  | VBool b -> string_of_bool b
-  | VLoc id -> string_of_id id
 
 (** The interpret function called from JavaScript *)
 let js_interpret s =
@@ -28,9 +16,12 @@ let js_interpret s =
   let outs = BatIO.output_string () in
   set_formatter_output outs;
 
+  (* clear tokens *)
+  clear_tokens ();
+
   let body = Js.to_string s in
   if String.trim body = "" then
-    Js.string ("Error: empty program")
+    WRError "Error: empty program"
   else
     let lexbuf = Lexing.from_string body in
     try
@@ -41,20 +32,25 @@ let js_interpret s =
 
       (* get output string *)
       let output = BatIO.close_out outs in
+      (* escape newlines for the sake of JSON *)
+      (* let output' = Str.global_replace (Str.regexp "\n") "\\n" output in *)
+      (* let output' = String.escaped output in *)
 
       (* return output string and result value *)
-      Js.string (output ^ "\n Result: " ^ (string_of_value v))
+      (* Js.string (output ^ "\n Result: " ^ (string_of_value v)) *)
+      WRSuccess (output ^ "\n Result: " ^ (string_of_value v) ^ "\n", v, BatList.rev (get_tokens ()), VTStub, TDStub, "\n",
+                 "\n");
     with
     | Parser.Error ->
-       Js.string ("Syntax error: " ^ (print_pos lexbuf))
+       WRError ("Syntax error: " ^ (print_pos lexbuf) ^ "\n")
     | Lexer.Syntax_err msg ->
-       Js.string ("Lexer error: " ^ (print_pos lexbuf) ^ "\n" ^  msg)
+       WRError ("Lexer error: " ^ (print_pos lexbuf) ^ "\n" ^  msg ^ "\n")
     | Ty_error msg ->
-       Js.string ("Type error: " ^ msg)
+       WRError ("Type error: " ^ msg ^ "\n")
     | Codegen_error err ->
-       Js.string ("Codegen error: " ^ err)
+       WRError ("Codegen error: " ^ err ^ "\n")
     | Ssa_interp_error err ->
-       Js.string ("Interpreter error: " ^ err)
+       WRError ("Interpreter error: " ^ err ^ "\n")
 
 (** Web worker boilerplate *)
 (** Taken from http://toss.sourceforge.net/ocaml.html *)
@@ -78,4 +74,7 @@ let _ = Js.Unsafe.set (Js.Unsafe.variable "self")
 
 (** Set this to match the OCaml function *)
 let _ = Js.Unsafe.set js_handler (Js.string "interpret")
-                      (Js.wrap_callback js_interpret)
+                      (Js.wrap_callback
+                         (fun s ->
+                           (Js.string
+                              (json_string_of_webresponse (js_interpret s)))))

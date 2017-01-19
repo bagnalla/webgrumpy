@@ -38,7 +38,7 @@ let js_interpret s =
 
       (* return output string and result value *)
       (* Js.string (output ^ "\n Result: " ^ (string_of_value v)) *)
-      WRSuccess (output ^ "\n Result: " ^ (string_of_value v) ^ "\n", v, BatList.rev (get_tokens ()), VTStub, TDStub, "\n",
+      WRSuccess (output ^ "\nResult: " ^ (string_of_value v) ^ "\n", v, BatList.rev (get_tokens ()), VTStub, TDStub, "\n",
                  "\n");
     with
     | Parser.Error ->

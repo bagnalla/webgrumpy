@@ -81,6 +81,8 @@ function doneCompile() {
     // $("#editbutton").css("display", "inline");
     $("#cancelbutton").css("display", "none");
 
+    $("#feedback").text("Finished.");
+
     tokenRenderer.setHighlightEnabled(true);
 }
 

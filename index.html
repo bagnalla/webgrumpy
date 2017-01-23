@@ -5,114 +5,11 @@
     <title>Grumpy</title>
     <link rel="stylesheet" type="text/css" href="styles/bootstrap.min.css">
     <link rel="stylesheet" href="https://code.jquery.com/ui/1.12.1/themes/base/jquery-ui.css">
-    <style type="text/css" media="screen">
-      /*#editor {
-      position: relative !important;
-      top: 0;
-      border: 1px solid lightgray;
-      height: 420px;
-      width: 545px;
-      }*/
-
-      #editor {
-      position: relative !important;
-      top: 0;
-      border: 1px solid lightgray;
-      margin-top: 0px;
-      height: 420px;
-      width: 545px;
-      z-index: 1;
-      margin-bottom: 0px;
-      padding-bottom: 0px;
-      border-bottom: groove;
-      }
-      #output {
-      position: relative !important;
-      top: 0;
-      border: 1px solid lightgray;
-      height: 100%;
-      /*width: 545px;*/
-      }
-
-      .fullwidth {
-      width: 100%;
-      margin-left: auto;
-      margin-right: auto;
-      }
-
-      h2 {
-      text-align: center;
-      }
-
-      .ui-state-active {
-      background: #606060 !important;
-      border-color: #909090 !important;
-      /*background: #909090 !important;*/
-      }
-
-      #content {
-      width: 100%;
-      text-align: left;
-      margin: auto;
-      }
-
-      #undereditor {
-      margin-top: 3px;
-      margin-left: 4px;
-      }
-
-      #feedback {
-      margin: auto;
-      margin-top: 10px;
-      font-size: 12px;
-      display: inline;
-      }
-
-      .myButton {
-      position: relative;
-      z-index: 3;
-      }
-
-      .plusminusbutton {
-      width: 20px;
-      margin-left: 1px;
-      margin-right: 1px;
-      }
-
-      table {
-      border: ridge;
-      border-width: 1px;
-      }
-
-      td {
-      vertical-align: top;
-      border: groove;
-      border-width: 1px;
-      }
-
-      footer {
-      margin-top: 10px;
-      bottom: 0px;
-      text-align: center;
-      }
-
-      .noborder {
-      border: none !important;
-      }
-
-      .tokenMarker {
-      position: absolute;
-      background: rgba(100,200,100,0.5);
-      z-index: 20
-      }
-
-      #outputtab {
-      padding-left: 0px;
-      }
-    </style>
-    <!-- <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.1.1/jquery.min.js"></script> -->
+    <!-- <link rel="stylesheet" type="text/css" href="styles/colResizable.css"> -->
+    <link rel="stylesheet" type="text/css" href="styles/grumpy.css">
     <script src="https://code.jquery.com/jquery-1.12.4.js"></script>
     <script src="https://code.jquery.com/ui/1.12.1/jquery-ui.js"></script>
+    <script src="scripts/colResizable-1.5.min.js"></script>
     <script>
       $( function() {
       $( "#tabs" ).tabs();
@@ -124,65 +21,159 @@
       <h2>Grumpy</h2>
 
       <div align="center">
-	<table class="noborder"><tr><td class="noborder">
+	<table id="outertable" class="noborder"><tr><td class="noborder">
 	      <button type="button" id="editorplusbutton"
 		      class="btn btn-xs plusminusbutton">+</button>
 	      <br>
 	      <button type="button" id="editorminusbutton"
 		      class="btn btn-xs plusminusbutton">-</button>
+	      <br>
+	      <button type="button" id="editorrightbutton"
+		      class="btn btn-xs plusminusbutton">&gt</button>
+	      <br>
+	      <button type="button" id="editorleftbutton"
+		      class="btn btn-xs plusminusbutton">&lt</button>	      
 	    </td><td class="noborder">
 	      <table id="maintable" border="1">
 		<tr>
-		  <td>
+		  <td id="maintdleft">
 		    <pre id="editor"></pre>
 		    <div id="undereditor">
 		      <button type="button" id="compilebutton"
 			      class="btn btn-primary myButton">Compile</button>
 		      <button type="button" id="cancelbutton"
 			      class="btn btn-danger myButton"><u>C</u>ancel</button>
-		      <!-- <button type="button" id="editbutton" -->
-		      <!-- 	      class="btn btn-default myButton"><u>E</u>dit</button> -->
 		      <div id="feedback"></div>
 		      <div class="checkbox">
-			<label><input type="checkbox" value="">Interpret</label>
+			<label>
+			  <input type="checkbox" id="interpretcheckbox"
+				 value="">Interpret
+			</label>
 		      </div>
 		    </div>
 		  </td>
-		  <td></td>
-		  <td class="noborder">
+		  <!-- <td></td> -->
+		  <td id="maintdright" class="noborder">
 		    <table class="noborder">
 		      <tr>
 			<td class="noborder">
 			  <div id="tabs" class="noborder">
 			    <ul>
-			      <li><a id="outputtablink" href="#outputtab">Output</a></li>
-			      <li><a id="tokenstablink" href="#tokenstab">Tokens</a></li>
-			      <li><a href="#asttab">AST</a></li>
-			      <li><a href="#typingtab">Typing Derivation</a></li>
-			      <li><a href="#rtltab">RTL</a></li>
-			      <li><a href="#llvmtab">LLVM</a></li>
+			      <li><a id="outputtablink" href="#outputtab">
+				  Output</a></li>
+			      <li><a id="tokenstablink" href="#tokenstab">
+				  Tokens</a></li>
+			      <li><a id="asttablink" href="#asttab">AST
+			      </a></li>
+			      <li><a id="typingtablink" href="#typingtab">
+				  Typing Derivation</a></li>
+			      <li><a id="rtltablink" href="#rtltab">RTL
+			      </a></li>
+			      <li><a id="llvmtablink" href="#llvmtab">
+				  LLVM</a></li>
 			    </ul>
 			    <div id="outputtab">
-			      <table class="noborder">
-				<tr>
+			      <table class="noborder fullWidth">
+				<tr class="fullWidth">
 				  <td class="noborder">
 				    <button type="button" id="outputplusbutton"
-					    class="btn btn-xs plusminusbutton">+</button>
+					    class="btn btn-xs plusminusbutton">
+				      +</button>
 				    <br>
 				    <button type="button" id="outputminusbutton"
-					    class="btn btn-xs plusminusbutton">-</button>
+					    class="btn btn-xs plusminusbutton">
+				      -</button>
 				  </td>
-				  <td class="noborder">
+				  <td class="noborder fullWidth">
 				    <pre id="output"></pre>
 				  </td>
 				</tr>
 			      </table>
 			    </div>
 			    <div id="tokenstab">
-			      <canvas id="tokenscanvas" width="600" height="525"></canvas>
+			      <table class="noborder">
+				<tr>
+				  <td class="noborder">
+				    <canvas id="tokenscanvas" width="0"
+					    height="0">
+				    </canvas>
+				  </td>
+				</tr>
+				<tr>
+				  <td class="noborder">
+				    Scale
+				    <button type="button"
+					    id="tokensminusbutton"
+					    class="btn btn-xs plusminusbutton
+						   nomarginpadding">
+				      <u>-</u></button>
+				    <button type="button"
+					    id="tokensplusbutton"
+					    class="btn btn-xs plusminusbutton
+						   nomarginpadding">
+				      <u>+</u></button>
+				    &nbsp;&nbsp;Scroll
+				    <button type="button"
+					    id="tokensdownbutton"
+					    class="btn btn-xs
+						   nomarginpadding">
+				      down</button>
+				    <button type="button"
+					    id="tokensupbutton"
+					    class="btn btn-xs
+						   nomarginpadding">
+				      up</button>
+				    (or arrow keys)
+				  </td>
+				</tr>
+			      </table>
 			    </div>
 			    <div id="asttab">
-			      <canvas id="astcanvas" width="600" height="525"></canvas>
+			      <table class="noborder">
+				<tr>
+				  <td class="noborder">
+				    <canvas id="astcanvas" width="0" height="0">
+				    </canvas>
+				  </td>
+				</tr>
+				<tr>
+				  <td class="noborder">
+				    Scale
+				    <button type="button"
+					    id="astminusbutton"
+					    class="btn btn-xs plusminusbutton
+						   nomarginpadding">
+				      <u>-</u></button>
+				    <button type="button"
+					    id="astplusbutton"
+					    class="btn btn-xs plusminusbutton
+						   nomarginpadding">
+				      <u>+</u></button>
+				    &nbsp;&nbsp;Scroll
+				    <button type="button"
+					    id="astleftbutton"
+					    class="btn btn-xs
+						   nomarginpadding">
+				      left</button>
+				    <button type="button"
+					    id="astrightbutton"
+					    class="btn btn-xs
+						   nomarginpadding">
+				      right</button>
+				    <button type="button"
+					    id="astdownbutton"
+					    class="btn btn-xs
+						   nomarginpadding">
+				      down</button>
+				    <button type="button"
+					    id="astupbutton"
+					    class="btn btn-xs
+						   nomarginpadding">
+				      up</button>
+				    (or arrow keys)
+				  </td>
+				</tr>
+			      </table>
 			    </div>
 			    <div id="typingtab">
 			    </div>
@@ -197,13 +188,9 @@
 		  </td>
 		</tr>
 	      </table>
-	    </td><!-- <td class="noborder"> -->
-	    <!--       <button type="button" id="canvasplusbutton" -->
-	    <!-- 	      class="btn btn-xs plusminusbutton">+</button> -->
-	    <!--       <br> -->
-	    <!--       <button type="button" id="canvasminusbutton" -->
-	    <!-- 	      class="btn btn-xs plusminusbutton">-</button> -->
-	    <!-- </td> --></tr></table>
+	    </td>
+	  </tr>
+	</table>
       </div>
 
       <script src="ace/ace.js" type="text/javascript" charset="utf-8"></script>

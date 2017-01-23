@@ -1,9 +1,377 @@
 (function e(t,n,r){function s(o,u){if(!n[o]){if(!t[o]){var a=typeof require=="function"&&require;if(!u&&a)return a(o,!0);if(i)return i(o,!0);var f=new Error("Cannot find module '"+o+"'");throw f.code="MODULE_NOT_FOUND",f}var l=n[o]={exports:{}};t[o][0].call(l.exports,function(e){var n=t[o][1][e];return s(n?n:e)},l,l.exports,e,t,n,r)}return n[o].exports}var i=typeof require=="function"&&require;for(var o=0;o<r.length;o++)s(r[o]);return s})({1:[function(require,module,exports){
-var TokenRenderer = require('./tokenrenderer');
+var Puddi = require ('./puddi/puddi.js');
+var Drawable = require('./puddi/puddidrawable.js');
+var Vector = require('victor');
+var Range = ace.require('ace/range').Range;
+
+///////////////
+// TREE NODES
+///////////////
+
+var MIN_NODE_WIDTH = 25;
+var MIN_NODE_HEIGHT = 25;
+var LINK_CONNECTOR_SIZE = 5;
+var NEIGHBOR_SPACING = 7;
+var CHILD_SPACING = MIN_NODE_HEIGHT * 1.5;
+
+// The first value is the array of position information values.
+// The rest are either atoms (strings) or nodes (arrays)
+var TreeNode = function(puddi, parent, values) {
+    // call superclass constructor
+    Drawable.call(this, puddi, parent);
+    this._body = [] // strings or links to children
+    this._construct(values);
+    this._width = Math.max(MIN_NODE_WIDTH, this._textWidth + 10);
+    this._height = MIN_NODE_HEIGHT;
+    this._computeTreeWidth();
+    this._computeTreeHeight();
+    this._active = false;
+}
+
+// set up inheritance
+TreeNode.prototype = Object.create(Drawable.prototype);
+TreeNode.prototype.constructor = TreeNode;
+
+TreeNode.prototype._construct = function(values) {
+    console.log("constructing ast node");
+    let pos_info = values[0];
+    values.splice(0, 1);
+
+    console.log(pos_info);
+
+    this._start_lnum = pos_info.start_lnum;
+    this._start_cnum = pos_info.start_cnum;
+    this._end_lnum = pos_info.end_lnum;
+    this._end_cnum = pos_info.end_cnum;
+
+    this._textWidth = 0;
+
+    for (let v of values) {
+	if (Array.isArray(v)) {
+	    // store index of child as link
+	    this._body.push(this._children.length);
+	    let node = new TreeNode(this._puddi, this, v);
+	    this._textWidth += LINK_CONNECTOR_SIZE;
+	}
+	else {
+	    // store string in body
+	    this._body.push(v);
+	    this._textWidth += this._puddi.getCtx().measureText(v).width;
+	}
+    }
+}
+
+TreeNode.prototype._childrenTreeWidth = function() {
+    if (!this._children) { return 0; }
+    w = 0;
+    for (let c of this._children) {
+	if (c.getTreeWidth) {
+	    w += c.getTreeWidth();
+	}
+    }
+    return w + NEIGHBOR_SPACING * (this._children.length - 1);
+}
+
+// Not tree width in the algorithms sense, but the total width in 2d
+// space of the tree rooted at this node. Assumes the tree widths of
+// children have been computed already (should always be the case).
+TreeNode.prototype._computeTreeWidth = function() {
+    this._treeWidth = Math.max(this._width, this._childrenTreeWidth());
+}
+
+TreeNode.prototype._computeTreeHeight = function() {
+    if (!this._children) { return 0; }
+    let max_h = this._height;
+    for (let c of this._children) {
+	if (c.getTreeHeight && c.getTreeHeight() + CHILD_SPACING > max_h) {
+	    max_h = c.getTreeHeight() + CHILD_SPACING;
+	}
+    }
+    this._treeHeight = max_h;
+}
+
+TreeNode.prototype.getTreeWidth = function() { return this._treeWidth; }
+TreeNode.prototype.getTreeHeight = function() { return this._treeHeight; }
+
+// Set the initial positions of children based on their tree widths.
+TreeNode.prototype.initPositions = function() {
+    let offset_y = CHILD_SPACING;
+    // let childrenTreeWidth = this._childrenTreeWidth();
+    let offset_x = -this._treeWidth / 2 + this._width / 2;
+    for (let i = 0; i < this._children.length; i++) {
+	let child = this._children[i];
+	child.initPositions();
+	child.setPosition(new Vector(offset_x + child.getTreeWidth() / 2
+				     - child.getWidth() / 2, offset_y));
+	if (child.getTreeWidth) {
+	    offset_x += child.getTreeWidth() + NEIGHBOR_SPACING;
+	}
+    }
+}
+
+TreeNode.prototype.getWidth = function() { return this._width; };
+TreeNode.prototype.getHeight = function() { return this._height; };
+
+TreeNode.prototype.getStartLNum = function() { return this._start_lnum; };
+TreeNode.prototype.getStartCNum = function() { return this._start_cnum; };
+TreeNode.prototype.getEndLNum = function() { return this._end_lnum; };
+TreeNode.prototype.getEndCNum = function() { return this._end_cnum; };
+
+TreeNode.prototype.setActive = function(a) {
+    this._active = a;
+    for (let c of this._children) {
+	if (c.setActive) {
+	    c.setActive(a);
+	}
+    }
+};
+
+// recursively check tree if a point is inside a node
+// and return that node
+TreeNode.prototype.containsPos = function(p) {
+    if (p.x >= this._position.x &&
+	p.x <= this._position.x + this._width &&
+	p.y >= this._position.y - this._height / 2 &&
+	p.y <= this._position.y + this._height / 2) {
+	return this;
+    }
+
+    for (let c of this._children) {
+	if (c.containsPos) {
+	    // adjust point to local coordinate space for children
+	    let localPoint = new Vector(p.x - this._position.x,
+					p.y - this._position.y);
+	    let contains = c.containsPos(localPoint);
+	    if (contains) { return contains; }
+	}
+    }
+    return null;
+}
+
+TreeNode.prototype._drawSelf = function(ctx) {
+    ctx.lineWidth = 2;
+    let textHeight = 10;// get font size from ctx
+    ctx.fillStyle = "white";
+    ctx.fillRect(0, -this._height / 2, this._width, this._height);
+    ctx.strokeRect(0, -this._height / 2, this._width, this._height);
+    if (this._active) {
+    	ctx.fillStyle = "rgba(100,200,100,0.4)";
+    	ctx.fillRect(0, -this._height / 2, this._width, this._height);
+    }
+    ctx.fillStyle = "black";
+
+    let offset_x = this._width / 2 - this._textWidth / 2;
+    for (let x of this._body) {
+	if (Number.isInteger(x)) {
+	    ctx.fillStyle = "gray";
+	    // draw link to child indexed by x
+	    ctx.fillRect(offset_x, -LINK_CONNECTOR_SIZE / 2.5,
+			 LINK_CONNECTOR_SIZE, LINK_CONNECTOR_SIZE);
+	    // ctx.lineWidth = 1;
+	    ctx.strokeStyle = "rgba(0, 0, 0, 0.25)";
+	    let childPos = this._children[x].getPosition();
+	    let childWidth = this._children[x].getWidth();
+	    let childHeight = this._children[x].getHeight();
+	    ctx.beginPath();
+	    ctx.moveTo(offset_x + LINK_CONNECTOR_SIZE / 2, 0);
+	    ctx.lineTo(childPos.x + childWidth / 2,
+		       childPos.y - childHeight / 2);
+	    ctx.stroke();
+	    offset_x += LINK_CONNECTOR_SIZE;
+	}
+	else {
+	    // draw atom string
+	    ctx.fillText(x, offset_x, textHeight / 2.5);
+	    offset_x += this._puddi.getCtx().measureText(x).width;
+	}
+    }
+};
+
+/////////////////
+// AST RENDERER
+/////////////////
+
+var AstRenderer = function(canvas, editor) {
+    this._ctx = canvas.getContext('2d');
+    this._puddi = new Puddi(canvas);
+    this._puddi.setCentered(true);
+    Drawable.call(this, this._puddi, undefined);
+    this._canvas = canvas;
+    this._editor = editor;
+    this._highlightEnabled = true;
+}
+
+// set up inheritance
+AstRenderer.prototype = Object.create(Drawable.prototype);
+AstRenderer.prototype.constructor = AstRenderer;
+
+AstRenderer.prototype.setHighlightEnabled = function(e) {
+    this._highlightEnabled = e;
+}
+
+AstRenderer.prototype.run = function() { this._puddi.resume(); };
+
+AstRenderer.prototype.pause = function() { this._puddi.stop(); };
+
+AstRenderer.prototype.resume = AstRenderer.prototype.run;
+
+AstRenderer.prototype.translate = function(t) {
+    this._puddi.translateScaled(t);
+}
+
+AstRenderer.prototype.scale = function(s) {
+    this._puddi.scaleTranslated(s);
+    this.refresh();
+};
+
+AstRenderer.prototype.refresh = function() {
+    this._puddi.refresh();
+}
+
+AstRenderer.prototype.initPositions = function() {
+    if (this._ast) {
+	// this._ast.setPosition(new Vector(this._canvas.width / 2 -
+	// 				 this._ast.getWidth(),
+	// 				 MIN_NODE_HEIGHT + 2));
+	let treeHeight = this._ast.getTreeHeight();
+	// this._ast.setPosition(new Vector(-this._ast.getWidth(), -treeHeight / 3));
+	this._ast.setPosition(new Vector(-this._ast.getWidth() / 2,
+					 -treeHeight / 3));
+	this._ast.initPositions();
+    }
+}
+
+AstRenderer.prototype.initScale = function() {
+    if (this._ast) {
+	let treeWidth = this._ast.getTreeWidth();
+	let treeHeight = this._ast.getTreeHeight();
+	console.log("treeWidth: " + treeWidth);
+	console.log("treeHeight: " + treeHeight);
+
+	let x_ratio = this._canvas.width / treeWidth;
+	let y_ratio = this._canvas.height / treeHeight;
+
+	if (x_ratio < y_ratio) {
+	    console.log("scaling by x. ratio: " + x_ratio);
+	    this.scale(x_ratio);
+	}
+	else {
+	    console.log("scaling by y. ratio: " + y_ratio);
+	    this.scale(Math.min(y_ratio, 1.5));
+	}
+    }
+}
+
+AstRenderer.prototype.addAst = function(ast) {
+    if (this._ast) {
+	this.removeChild(this._ast);
+    }
+    this._ast = new TreeNode(this._puddi, this, ast);
+}
+
+AstRenderer.prototype.clear = function() {
+    this._ast = null;
+    this.clearChildren();
+};
+
+AstRenderer.prototype.softReset = function() {
+    this._puddi.clearTransform();
+    this.initScale();
+    this.initPositions();
+}
+
+AstRenderer.prototype.reset = function() {
+    this.clear();
+    this._puddi.clearTransform();
+}
+
+AstRenderer.prototype.mousemove = function(pos) {
+    let scale = this._puddi.getScale();
+    let scaleInv = 1 / scale;
+    pos.x *= scaleInv;
+    pos.y *= scaleInv;
+
+    pos.x -= this._canvas.width / 2 * scaleInv + this._puddi.getTranslate().x;
+    pos.y -= this._canvas.height / 2 * scaleInv + this._puddi.getTranslate().y;
+
+    let mousedOver = this._ast.containsPos(pos);
+    
+    if (mousedOver) {
+    	if (this._activeNode) {
+    	    if (mousedOver !== this._activeNode) {
+    		this._activeNode.setActive(false);
+    		this._editor.session.removeMarker(this._activeNodeMarker);
+    		this._activeNode = mousedOver;
+    		this._activeNode.setActive(true);
+    		if (this._highlightEnabled) {
+    		    this._activeNodeMarker =
+    			this._editor.session.addMarker(
+    			    new Range(this._activeNode.getStartLNum()-1,
+    				      this._activeNode.getStartCNum(),
+    				      this._activeNode.getEndLNum()-1,
+    				      this._activeNode.getEndCNum()),
+    			    "tokenMarker", "line", true);
+		    console.log((this._activeNode.getStartLNum()-1) + ", " +
+    				this._activeNode.getStartCNum() + ", " +
+    				(this._activeNode.getEndLNum()-1) + ", " +
+    				this._activeNode.getEndCNum());
+    		}
+    	    }
+    	}
+    	else {
+    	    this._activeNode = mousedOver;
+    	    this._activeNode.setActive(true);
+    	    if (this._highlightEnabled) {
+    		this._activeNodeMarker =
+    		    this._editor.session.addMarker(
+    			new Range(this._activeNode.getStartLNum()-1,
+    				  this._activeNode.getStartCNum(),
+    				  this._activeNode.getEndLNum()-1,
+    				  this._activeNode.getEndCNum()),
+    			"tokenMarker", "line", true);
+		console.log((this._activeNode.getStartLNum()-1) + ", " +
+    			    this._activeNode.getStartCNum() + ", " +
+    			    (this._activeNode.getEndLNum()-1) + ", " +
+    			    this._activeNode.getEndCNum());
+    	    }
+    	}
+    }
+    else {
+    	if (this._activeNode) {
+    	    this._activeNode.setActive(false);
+    	    this._activeNode = null;
+    	    this._editor.session.removeMarker(this._activeNodeMarker);
+    	    this._activeNodeMarker = null;
+    	}
+    }
+};
+
+// EXPORT
+module.exports = AstRenderer;
+
+},{"./puddi/puddi.js":4,"./puddi/puddidrawable.js":5,"victor":3}],2:[function(require,module,exports){
+var TokenRenderer = require('./tokenrenderer.js');
+var AstRenderer = require('./astrenderer.js');
+var Vector = require('victor');
+
+// http://stackoverflow.com/a/4253415
+String.prototype.escape = function() {
+    return this.replace(/\n/g, "\\n")
+        // .replace(/\'/g, "\\'")
+        .replace(/\"/g, '\\"')
+        // .replace(/\&/g, "\\&")
+        // .replace(/\r/g, "\\r")
+        .replace(/\t/g, "\\t")
+        // .replace(/\b/g, "\\b")
+        // .replace(/\f/g, "\\f");
+};
 
 var hotkeysEnabled = false;
 var timeoutId = null;
 var tokenRenderer = null; // create in init()
+var astRenderer = null; // create in init()
+var activeRenderer = null; // keep track of renderer currently being used
+var compiling = false;
 
 function setOutput(outp) {
     let output = ace.edit("output");
@@ -52,40 +420,48 @@ function cancelWorker () {
     worker = createWorker();
 }
 
+// ui transition to editing
 function startEdit() {
-    hotkeysEnabled = false
+    hotkeysEnabled = false;
+    compiling = false;
     $("#compilebutton").css("display", "inline");
-    // $("#editbutton").css("display", "none");
     $("#cancelbutton").css("display", "none");
 
     let editor = ace.edit("editor");
-    // editor.setReadOnly(false);
 
     tokenRenderer.setHighlightEnabled(false);
+    astRenderer.setHighlightEnabled(false);
 }
 
+// ui transition to compiling
 function startCompile() {
     hotkeysEnabled = true;
+    compiling = true;
     $("#compilebutton").css("display", "none");
-    // $("#editbutton").css("display", "none");
     $("#cancelbutton").css("display", "inline");
 
-    let editor = ace.edit("editor");
-    // editor.setReadOnly(true);
+    $("#feedback").text("Compiling...");
 
-    tokenRenderer.clearTokens();
+    tokenRenderer.reset();
+    astRenderer.reset();
+    // tokenRenderer.pause();
+    // astRenderer.pause();
 }
 
+// ui transition when finished compiling
 function doneCompile() {
+    compiling = false;
     $("#compilebutton").css("display", "inline");
-    // $("#editbutton").css("display", "inline");
     $("#cancelbutton").css("display", "none");
 
     $("#feedback").text("Finished.");
 
     tokenRenderer.setHighlightEnabled(true);
+    astRenderer.setHighlightEnabled(true);
 }
 
+// called when compilation starts. cancelled when compilation finishes
+// or when use presses cancel
 function startTimeout() {
     timeoutId = setTimeout(function() {
 	cancelWorker();
@@ -94,37 +470,56 @@ function startTimeout() {
     }, 30000);
 }
 
-function compile () {
+// when user presses compile
+function compile() {
     startTimeout();
     startCompile();
 
-    setOutput("Compiling...");
+    setOutput("");
 
     let editor = ace.edit("editor");
     var txt = editor.getValue();
 
-    ASYNCH ("interpret", [txt], function (response) {
+    let interpFlag;
+    if (document.getElementById('interpretcheckbox').checked) {
+	interpFlag = "1";
+    }
+    else { interpFlag = "0"; }
+
+    let request = "[0," + interpFlag + ",\"" + txt.escape() + "\"]";
+    console.log(request);
+
+    ASYNCH ("compile", [request], function (response) {
 	cancelTimeout();
-	// document.getElementById("compilebutton").disabled = false; 
-	//setOutput(response);
+	console.log(response);
 	let responseObject = JSON.parse(response);
 	console.log(responseObject);
-	//setOutput(responseObject.output);
 	if (responseObject.error) {
-	    $("#output .ace_content").css("color", "rgb(200,0,0)");
+	    $("#output .ace_content").css("color", "rgb(225,0,0)");
 	    setOutput(responseObject.error);
 	    startEdit();
 	}
 	else {
 	    $("#output .ace_content").css("color", "black");
 	    setOutput(responseObject.output);
+	    // setOutput(JSON.stringify(responseObject.ast));
 	    tokenRenderer.addTokens(responseObject.tokens);
 	    tokenRenderer.positionTokens();
+	    astRenderer.addAst(responseObject.ast);
+	    astRenderer.initScale();
+	    astRenderer.initPositions();
 	    doneCompile();
 	}
     })
 }
 
+var editorWidthOverride = null;
+var x_margin = 75;
+var y_margin = 135;
+
+var editorShift = 0;
+
+// fit everything to the screen
 function rescale() {
     screen_width = window.innerWidth
 	|| document.documentElement.clientWidth
@@ -133,11 +528,29 @@ function rescale() {
 	|| document.documentElement.clientHeight
 	|| document.body.clientHeight;
     console.log("width: " + screen_width + ", height: " + screen_height);
+
+    // disable column dragging for now
+    // $("#maintable").colResizable({ disable: true });
+    // $("#maintable").colResizable({
+    // 	liveDrag: true,
+    // 	onDrag: function(evt) {
+    // 	    let x = evt.clientX;
+    // 	    editorWidthOverride = x / (screen_width);
+    // 	    console.log(editorWidthOverride);
+    // 	    setTimeout(rescale, 100);
+    // 	}
+    // });
+
+    let w = screen_width - x_margin;
+    let h = screen_height - y_margin; // vertical space available
     
-    let w = screen_width - 75; // 25 margin on both sides
-    let h = screen_height - 135; // vertical space available
+    if (editorWidthOverride) {
+	var editor_width = editorWidthOverride * w;
+    }
     // give editor 80 columns or half the width if not enough space
-    let editor_width = Math.min(545, w / 2);
+    else {
+	editor_width = Math.min(545, w / 2) + editorShift;
+    }
     $("#editor").css("width", editor_width);
     $("#feedback").css("width", editor_width - 4); // minus left margin
     
@@ -145,10 +558,13 @@ function rescale() {
     $("#tabs").css("width", w - editor_width);
     $("#output").css("width", w - editor_width - 45);
 
+    $("#maintdleft").css("width", editor_width);
+    $("#maintdright").css("width", w - editor_width);
+
     let tokensCanvas = document.getElementById("tokenscanvas");
     let astCanvas = document.getElementById("astcanvas");
-    tokensCanvas.width = w - editor_width - 50;
-    astCanvas.width = w - editor_width - 50;
+    tokensCanvas.width = w - editor_width - 15;
+    astCanvas.width = w - editor_width - 15;
 
     let tabListHeight = $(".ui-tabs-nav")[0].offsetHeight;
     console.log(tabListHeight);
@@ -165,17 +581,10 @@ function rescale() {
     let editor = ace.edit("editor");
     editor.resize();
 
-    // refresh token renderer
-    tokenRenderer.positionTokens();
+    // refresh renderers
+    tokenRenderer.refresh();
+    astRenderer.refresh();
 }
-
-$(document).ready(function() {
-    rescale();
-});
-
-window.addEventListener('resize', function(event){
-    rescale();
-});
 
 function increaseFontSize(editor) {
     editor.setOption("fontSize", editor.getOption("fontSize") + 1);
@@ -204,6 +613,45 @@ $("#editbutton").click(function() {
 $("#outputtablink").click(function() {
     let output = ace.edit("output");
     output.resize();
+    tokenRenderer.pause();
+    astRenderer.pause();
+    activeRenderer = null;
+});
+
+$("#tokenstablink").click(function() {
+    tokenRenderer.resume();
+    astRenderer.pause();
+    activeRenderer = tokenRenderer;
+    setTimeout(function () {
+	document.getElementById("tokensminusbutton").focus();
+    }, 100);
+});
+
+$("#asttablink").click(function() {
+    tokenRenderer.pause();
+    astRenderer.resume();
+    activeRenderer = astRenderer;
+    setTimeout(function () {
+	document.getElementById("astminusbutton").focus();
+    }, 100);
+});
+
+$("#typingtablink").click(function() {
+    tokenRenderer.pause();
+    astRenderer.pause();
+    activeRenderer = null;
+});
+
+$("#rtltablink").click(function() {
+    tokenRenderer.pause();
+    astRenderer.pause();
+    activeRenderer = null;
+});
+
+$("#llvmtablink").click(function() {
+    tokenRenderer.pause();
+    astRenderer.pause();
+    activeRenderer = null;
 });
 
 // compute mouse pos relative to canvas given event object
@@ -215,6 +663,44 @@ function getMousePos(canvas, evt) {
     };
 }
 
+function scrollLeft(evt) {
+    if (activeRenderer) {
+	if (evt) {
+	    evt.preventDefault();
+	}
+	activeRenderer.translate(new Vector(10, 0));
+    }
+}
+
+function scrollUp(evt) {
+    if (activeRenderer) {
+	if (evt) {
+	    evt.preventDefault();
+	}
+	activeRenderer.translate(new Vector(0, 10));
+    }
+}
+
+function scrollRight(evt) {
+    if (activeRenderer) {
+	if (evt) {
+	    evt.preventDefault();
+	}
+	activeRenderer.translate(new Vector(-10, 0));
+    }
+}
+
+function scrollDown(evt) {
+    if (activeRenderer) {
+	if (evt) {
+	    evt.preventDefault();
+	}
+	activeRenderer.translate(new Vector(0, -10));
+    }
+}
+
+
+// set up editors, canvases, and renderers
 function init() {
     let editor = ace.edit("editor");
     editor.setTheme("ace/theme/chrome");
@@ -224,12 +710,12 @@ function init() {
 
     editor.on('change', function() {
 	tokenRenderer.setHighlightEnabled(false);
-	$("#feedback").text("Code changed. Token highlighting disabled.");
+	astRenderer.setHighlightEnabled(false);
+	$("#feedback").text("Code changed. Token/AST highlighting disabled.");
     });
 
     let output = ace.edit("output");
     output.setTheme("ace/theme/iplastic");
-    // output.session.setMode("ace/mode/javascript");
     output.session.setUseWorker(false);
     output.setReadOnly(true);
     output.setOption("showPrintMargin", false)
@@ -241,6 +727,15 @@ function init() {
     $("#editorminusbutton").click(function() {
 	decreaseFontSize(editor);
     });
+    $("#editorleftbutton").click(function() {
+	editorShift -= 25;
+	rescale();
+    });
+    $("#editorrightbutton").click(function() {
+	editorShift += 25;
+	rescale();
+    });
+
     $("#outputplusbutton").click(function() {
 	increaseFontSize(output);
     });
@@ -259,15 +754,115 @@ function init() {
 	let pos = getMousePos(tokensCanvas, evt);
 	tokenRenderer.mousemove(pos);
     }, false);
+
+
+    $("#tokensplusbutton").click(function() {
+	tokenRenderer.scale(1.1);
+    });
+    $("#tokensminusbutton").click(function() {
+	tokenRenderer.scale(0.9);
+    });
+
+    $("#tokensdownbutton").click(function() {
+	scrollDown();
+    });
+    $("#tokensupbutton").click(function() {
+	scrollUp();
+    });
     
-    // let astCanvas = document.getElementById("astcanvas");
+    // set up ast renderer
+    let astCanvas = document.getElementById("astcanvas");
+    astRenderer = new AstRenderer(astCanvas, editor);
+    // astCanvas.addEventListener('click', function(evt) {
+    // 	let pos = getMousePos(astCanvas, evt);
+    // 	astRenderer.click(pos);
+    // }, false);
+    astCanvas.addEventListener('mousemove', function(evt) {
+	let pos = getMousePos(astCanvas, evt);
+	astRenderer.mousemove(pos);
+    }, false);
+
+    $("#astplusbutton").click(function() {
+	astRenderer.scale(1.1);
+    });
+    $("#astminusbutton").click(function() {
+	astRenderer.scale(0.9);
+    });
+
+
+    $("#astleftbutton").click(function() {
+	scrollLeft();
+    });
+    $("#astrightbutton").click(function() {
+	scrollRight();
+    });
+    $("#astdownbutton").click(function() {
+	scrollDown();
+    });
+    $("#astupbutton").click(function() {
+	scrollUp();
+    });
+
 
     startEdit();
 }
 
-init();
+window.addEventListener('resize', function(event){
+    rescale();
+});
 
-},{"./tokenrenderer":6}],2:[function(require,module,exports){
+$(document).ready(function() {
+    init();
+    rescale();
+});
+
+document.addEventListener('keydown', function(e) {
+    if (!hotkeysEnabled) { return; }
+
+    switch (e.keyCode) {
+    case 37: // left
+    // case 65: // a
+	scrollLeft(e);
+	break;
+    case 38: // up
+    // case 87: // w
+	scrollUp(e);
+	break;
+    case 39: // right
+    // case 68: // d
+	scrollRight(e);
+	break;
+    case 40: // down
+    // case 83: // s
+	scrollDown(e);
+	break;
+    case 66: // b
+	break;
+    case 67: // c
+	if (compiling) {
+	    document.getElementById("cancelbutton").click();
+	}
+	break;
+    case 82: // r
+	if (activeRenderer) {
+	    activeRenderer.softReset();
+	}
+	break;
+    case 173: // -
+	if (activeRenderer) {
+	    activeRenderer.scale(0.9);
+	}
+	break;
+    case 61: // +
+	if (activeRenderer) {
+	    activeRenderer.scale(1.1);
+	}
+	break;
+    default:
+    }
+});
+
+},{"./astrenderer.js":1,"./tokenrenderer.js":7,"victor":3}],3:[function(require,module,exports){
 exports = module.exports = Victor;
 
 /**
@@ -1593,34 +2188,68 @@ function degrees2radian (deg) {
 	return deg / degrees;
 }
 
-},{}],3:[function(require,module,exports){
-var Puddi = function(ctx) {
-    this._ctx = ctx;
+},{}],4:[function(require,module,exports){
+// Puddi graphics runtime. Each instance of puddi is associated with a
+// canvas element.
+
+var Vector = require('victor');
+
+var Puddi = function(canvas) {
+    this._ctx = canvas.getContext('2d');
     this._objects = [];
     this._scale = 1.0;
-    this._time = { ms: 0 } // wrap in object so update() can change it
+    this._translate = new Vector(0.0, 0.0);
+    this._state = {
+	canvas: canvas,
+	objects: [],
+	scale: 1.0,
+	translate: new Vector(0.0, 0.0),
+	time: 0,
+	stopCycle: 0,
+	centered: false // scaling mode
+    }
 };
 
-function update(tFrame, time, objects) {
+function update(tFrame, state) {
     // compute the time elapsed since the last update
-    let time_elapsed = tFrame - time.ms;
+    let time_elapsed = tFrame - state.time;
 
     // update the timestamp
-    time.ms = tFrame;
+    state.time = tFrame;
 
     // update all objects
-    for (let o of objects) {
+    for (let o of state.objects) {
 	o.update(time_elapsed);
     }
 };
 
-function draw(ctx, scale, objects) {
+function centeredTranslate(state) {
+    return new Vector(state.canvas.width / 2 +
+		      state.translate.x * state.scale,
+		      state.canvas.height / 2 +
+		      state.translate.y * state.scale);
+}
+
+function getModTranslate(state) {
+    if (state.centered) {
+	return centeredTranslate(state);
+    }
+    else {
+	return state.translate;
+    }
+}
+
+function draw(ctx, state) {
     // clear canvas
-    ctx.clearRect(0, 0, ctx.canvas.width * scale,
-			 ctx.canvas.height * scale);
+    let scaleInv = 1 / state.scale;
+    let modTranslate = getModTranslate(state);
+    ctx.clearRect(-modTranslate.x * scaleInv,
+		  -modTranslate.y * scaleInv,
+		  ctx.canvas.width * scaleInv,
+		  ctx.canvas.height * scaleInv);
 
     // draw all objects
-    for (let o of objects) {
+    for (let o of state.objects) {
 	if (o.draw) {
 	    o.draw(ctx);
 	}
@@ -1629,72 +2258,123 @@ function draw(ctx, scale, objects) {
 
 Puddi.prototype.run = function() {
     // initialize this._time to the current time
-    this._time.ms = performance.now();
+    this._state.time = performance.now();
 
     // since "this" won't be bound to the puddi object when cycle is
     // called, wrap cycle in a closure with the necessary members of
     // this object.
     
-    let stopCycle = this._stopCycle;
+    // let stopCycle = this._stopCycle;
     let stop = this._stop;
     let ctx = this._ctx;
-    let scale = this._scale;
-    let time = this._time;
-    let objects = this._objects;
+    // let translate = this._translate
+    // let scale = this._scale;
+    // let time = this._time;
+    // let objects = this._objects;
+    let state = this._state;
     let cycle = function(tFrame) {
 	// re-register for the next frame
-	stopCycle = window.requestAnimationFrame(cycle);
+	state.stopCycle = window.requestAnimationFrame(cycle);
 
 	// update
-	if (update(tFrame, time, objects) < 0) {
+	if (update(tFrame, state) < 0) {
 	    stop();
 	    return;
 	}
 
 	// draw
-	draw(ctx, scale, objects);
+	draw(ctx, state);
     };
 
     // register the cycle function with the browser update loop
-    this._stopCycle = window.requestAnimationFrame(cycle);
+    this._state.stopCycle = window.requestAnimationFrame(cycle);
 };
 
 // deregister from the browser update loop
 Puddi.prototype.stop = function() {
-    window.cancelAnimationFrame(this._stopCycle);
+    window.cancelAnimationFrame(this._state.stopCycle);
 };
 
 // reregister with the browser update loop
 Puddi.prototype.resume = function() {
-    this._stopCycle = window.requestAnimationFrame(this._cycle);
+    // this._stopCycle = window.requestAnimationFrame(this._cycle);
+    this.run();
 };
 
 Puddi.prototype.addObject = function(o) {
-    this._objects.push(o);
+    this._state.objects.push(o);
 };
 
 Puddi.prototype.removeObject = function(o) {
-    for (let i = 0; i < this._objects.length; i++) {
+    for (let i = 0; i < this.state._objects.length; i++) {
 	// use the object's provided equals method
-	if (o.equals(this._objects[i])) {
-	    this._objects.splice(i, 1);
+	if (o.equals(this._state.objects[i])) {
+	    this._state.objects.splice(i, 1);
 	}
     }
 };
 
 Puddi.prototype.getCtx = function() { return this._ctx; };
 
-Puddi.prototype.scale = function(s) {
-    this._scale *= s;
-    this._ctx.scale(this._scale, this._scale);
+Puddi.prototype.refresh = function() {
+    this._state.canvas.width += 0; //  reset canvas transform
+    let translate = getModTranslate(this._state);
+    this._ctx.transform(this._state.scale, 0, 0, this._state.scale,
+			translate.x, translate.y);
+
+    // this._ctx.transform(this._state.scale, 0, 0, this._state.scale,
+    // 			this._state.translate.x,
+    // 			this._state.translate.y);
+
+    // this._ctx.scale(this._state.scale, this._state.scale);
+    // this._ctx.translate(this._state.translate.x * this._state.scale,
+    // 			this._state.translate.y * this._state.scale);
 };
 
-Puddi.prototype.getScale = function() { return this._scale; };
+Puddi.prototype.translate = function(t) {
+    this._state.translate.x += t.x;
+    this._state.translate.y += t.y;
+    this.refresh();
+};
 
+Puddi.prototype.translateScaled = function(t) {
+    this._state.translate.x += t.x * (1 / this._state.scale);
+    this._state.translate.y += t.y * (1 / this._state.scale);
+    this.refresh();
+};
+
+Puddi.prototype.scale = function(s) {
+    this._state.scale *= s;
+    this.refresh();
+};
+
+Puddi.prototype.scaleTranslated = function(s) {
+    // let oldScale = this._state.scale;
+    this._state.scale *= s;
+    // this._state.translate.x *= 1 / s;
+    // this._state.translate.y *= 1 / s;
+    this.refresh();
+};
+
+Puddi.prototype.getScale = function() { return this._state.scale; };
+
+Puddi.prototype.clearTransform = function() {
+    this._state.scale = 1.0;
+    this._state.translate = new Vector(0, 0);
+    this.refresh();
+}
+
+Puddi.prototype.setCentered = function(b) { this._state.centered = b; };
+
+Puddi.prototype.getTranslate = function() {
+    return this._state.translate;
+}
 // EXPORT
 module.exports = Puddi;
 
-},{}],4:[function(require,module,exports){
+},{"victor":3}],5:[function(require,module,exports){
+// Drawable puddi object class
+
 var PuddiObject = require('./puddiobject.js');
 
 function PuddiDrawable(puddi, parent) {
@@ -1738,7 +2418,9 @@ PuddiDrawable.prototype.draw = function(ctx) {
 // EXPORT
 module.exports = PuddiDrawable;
 
-},{"./puddiobject.js":5}],5:[function(require,module,exports){
+},{"./puddiobject.js":6}],6:[function(require,module,exports){
+// Base puddi object class
+
 var Puddi = require('./puddi.js');
 var Vector = require('victor');
 
@@ -1845,7 +2527,10 @@ PuddiObject.prototype.delete = function() {
 // EXPORT
 module.exports = PuddiObject;
 
-},{"./puddi.js":3,"victor":2}],6:[function(require,module,exports){
+},{"./puddi.js":4,"victor":3}],7:[function(require,module,exports){
+// This file contains the Token object class as well as the TokenRenderer
+// class which manages the tokens canvas 
+
 var Puddi = require ('./puddi/puddi.js');
 var Drawable = require('./puddi/puddidrawable.js');
 var Vector = require('victor');
@@ -1870,15 +2555,9 @@ var Token = function(puddi, parent, value,
     this._end_cnum = end_cnum;
     this._active = false;
     this._height = MIN_TOKEN_HEIGHT;
-    // this._initWidth();
     this._textWidth = puddi.getCtx().measureText(this._value).width;
     this._width = Math.max(MIN_TOKEN_WIDTH, this._textWidth + 10);
 }
-
-// Token.prototype._initWidth = function() {
-//     this._textWidth = ctx.measureText(this._value).width;
-//     this._width = Math.max(MIN_TOKEN_WIDTH, this._textWidth + 2);
-// };
 
 // set up inheritance
 Token.prototype = Object.create(Drawable.prototype);
@@ -1901,16 +2580,13 @@ Token.prototype._drawSelf = function(ctx) {
     ctx.fillStyle = "white";
     ctx.fillRect(0, -this._height / 2, this._width, this._height);
     ctx.strokeRect(0, -this._height / 2, this._width, this._height);
+    if (this._active) {
+	ctx.fillStyle = "rgba(100,200,100,0.4)";
+	ctx.fillRect(0, -this._height / 2, this._width, this._height);
+    }
     ctx.fillStyle = "black";
     ctx.fillText(this._value, this._width / 2 - textWidth / 2,
 		 textHeight / 2.5);
-
-    if (this._active) {
-	// ctx.fillStyle = "rgba(0,255,0,0.25)";
-	ctx.fillStyle = "rgba(100,200,100,0.4)";
-	// ctx.fillStyle = "rgba(200,100,100,0.4)";
-	ctx.fillRect(0, -this._height / 2, this._width, this._height);
-    }
 };
 
 ////////////////////
@@ -1919,13 +2595,12 @@ Token.prototype._drawSelf = function(ctx) {
 
 var TokenRenderer = function(canvas, editor) {
     this._ctx = canvas.getContext('2d');
-    this._puddi = new Puddi(this._ctx);
+    this._puddi = new Puddi(canvas);
     Drawable.call(this, this._puddi, undefined);
     this._canvas = canvas;
     this._editor = editor;
     this._tokens = [];
     this._highlightEnabled = true;
-    this._puddi.run();
 }
 
 // set up inheritance
@@ -1936,9 +2611,35 @@ TokenRenderer.prototype.setHighlightEnabled = function(e) {
     this._highlightEnabled = e;
 }
 
+TokenRenderer.prototype.run = function() { this._puddi.resume(); };
+
 TokenRenderer.prototype.pause = function() { this._puddi.stop(); };
 
-TokenRenderer.prototype.resume = function() { this._puddi.resume(); };
+TokenRenderer.prototype.resume = TokenRenderer.prototype.run;
+
+TokenRenderer.prototype.translate = function(t) {
+    // restrict translation
+    t.x = 0;
+    if (this._position.y + t.y >= 0) {
+	console.log(this._position.y + " " + t.y);
+	this.setPosition(new Vector(this._position.x, 0));
+    }
+    else {
+	Object.getPrototypeOf(Drawable.prototype).translate.call(this,
+          new Vector(t.x * (1 / this._puddi.getScale()),
+		     t.y * (1 / this._puddi.getScale())));
+    }
+}
+
+TokenRenderer.prototype.scale = function(s) {
+    this._puddi.scale(s);
+    this.refresh();
+};
+
+TokenRenderer.prototype.refresh = function() {
+    // this._puddi.refresh();
+    this.positionTokens();
+}
 
 TokenRenderer.prototype.addTokens = function(tokens) {
     console.log("adding tokens");
@@ -1950,9 +2651,20 @@ TokenRenderer.prototype.addTokens = function(tokens) {
     }
 };
 
-TokenRenderer.prototype.clearTokens = function() {
+TokenRenderer.prototype.clear = function() {
     this._tokens = [];
     this.clearChildren();
+    this._puddi.refresh();
+};
+
+TokenRenderer.prototype.softReset = function() {
+    this._puddi.clearTransform();
+    this.setPosition(new Vector(0, 0));
+}
+
+TokenRenderer.prototype.reset = function() {
+    this.clear();
+    this._puddi.clearTransform();
 }
 
 TokenRenderer.prototype.positionTokens = function() {
@@ -1960,7 +2672,7 @@ TokenRenderer.prototype.positionTokens = function() {
     let pos_y = MIN_TOKEN_HEIGHT;
     for (let tok of this._tokens) {
 	if (pos_x + tok.getWidth() >
-	    this._canvas.width * this._puddi.getScale()) {
+	    this._canvas.width * (1 / this._puddi.getScale())) {
 	    pos_x = 1;
 	    pos_y += MIN_TOKEN_HEIGHT + 1;
 	}
@@ -1971,15 +2683,21 @@ TokenRenderer.prototype.positionTokens = function() {
 
 TokenRenderer.prototype.mousemove = function(pos) {
     let scale = this._puddi.getScale();
+    let scaleInv = 1 / scale;
+    pos.x *= scaleInv;
+    pos.y *= scaleInv;
 
     let mousedOver = null;
 
     for (let tok of this._tokens) {
-	let tpos = tok.getPosition();
+	let _tpos = tok.getPosition();
+	let tpos = new Vector(_tpos.x + this._position.x,
+			      _tpos.y + this._position.y);
+	
 	if (pos.x >= tpos.x &&
-	    pos.x <= tpos.x + tok.getWidth() * scale &&
-	    pos.y >= tpos.y - tok.getHeight() / 2 * scale &&
-	    pos.y <= tpos.y + tok.getHeight() / 2 * scale) {
+	    pos.x <= tpos.x + tok.getWidth() &&
+	    pos.y >= tpos.y - tok.getHeight() / 2 &&
+	    pos.y <= tpos.y + tok.getHeight() / 2) {
 	    mousedOver = tok;
 	    break;
 	}
@@ -2030,4 +2748,4 @@ TokenRenderer.prototype.mousemove = function(pos) {
 // EXPORT
 module.exports = TokenRenderer;
 
-},{"./puddi/puddi.js":3,"./puddi/puddidrawable.js":4,"victor":2}]},{},[1]);
+},{"./puddi/puddi.js":4,"./puddi/puddidrawable.js":5,"victor":3}]},{},[2]);

@@ -3,15 +3,18 @@ open Lexing
 open AST
 open Tycheck
 open Ssa
+open Simplejson
 open Grumpyjsutil
+
+type jsrequest = bool * string
 
 let print_pos lexbuf =
   let pos = lexbuf.lex_curr_p in
   pos.pos_fname ^ " line " ^ (string_of_int pos.pos_lnum) ^
     " col " ^ (string_of_int (pos.pos_cnum - pos.pos_bol + 1))
 
-(** The interpret function called from JavaScript *)
-let js_interpret s =
+(** The compile function called from JavaScript *)
+let js_compile s =
   (* redirect interpreter output to a string *)
   let outs = BatIO.output_string () in
   set_formatter_output outs;
@@ -19,38 +22,34 @@ let js_interpret s =
   (* clear tokens *)
   clear_tokens ();
 
-  let body = Js.to_string s in
+  (* let body = Js.to_string s in *)
+  let (interpFlag, body) = Json.unsafe_input s in
   if String.trim body = "" then
-    WRError "Error: empty program"
+    JRError "Error: empty program"
   else
     let lexbuf = Lexing.from_string body in
     try
       let p = Parser.prog Lexer.token lexbuf in
       let p_tychecked = tycheck_prog p in
       let p_rtl = ssa_of_prog p_tychecked in
-      let v = ssa_interp p_rtl in
+      let v = if interpFlag then ssa_interp p_rtl else VUnit in
 
       (* get output string *)
       let output = BatIO.close_out outs in
-      (* escape newlines for the sake of JSON *)
-      (* let output' = Str.global_replace (Str.regexp "\n") "\\n" output in *)
-      (* let output' = String.escaped output in *)
-
-      (* return output string and result value *)
-      (* Js.string (output ^ "\n Result: " ^ (string_of_value v)) *)
-      WRSuccess (output ^ "\nResult: " ^ (string_of_value v) ^ "\n", v, BatList.rev (get_tokens ()), VTStub, TDStub, "\n",
-                 "\n");
+      JRSuccess (output ^ "\nResult: " ^ (string_of_value v) ^ "\n", v,
+                 BatList.rev (get_tokens ()), vistree_of_prog p_tychecked,
+                 TDStub, "\n", "\n");
     with
     | Parser.Error ->
-       WRError ("Syntax error: " ^ (print_pos lexbuf) ^ "\n")
+       JRError ("Syntax error: " ^ (print_pos lexbuf) ^ "\n")
     | Lexer.Syntax_err msg ->
-       WRError ("Lexer error: " ^ (print_pos lexbuf) ^ "\n" ^  msg ^ "\n")
+       JRError ("Lexer error: " ^ (print_pos lexbuf) ^ "\n" ^  msg ^ "\n")
     | Ty_error msg ->
-       WRError ("Type error: " ^ msg ^ "\n")
+       JRError ("Type error: " ^ msg ^ "\n")
     | Codegen_error err ->
-       WRError ("Codegen error: " ^ err ^ "\n")
+       JRError ("Codegen error: " ^ err ^ "\n")
     | Ssa_interp_error err ->
-       WRError ("Interpreter error: " ^ err ^ "\n")
+       JRError ("Interpreter error: " ^ err ^ "\n")
 
 (** Web worker boilerplate *)
 (** Taken from http://toss.sourceforge.net/ocaml.html *)
@@ -73,8 +72,11 @@ let _ = Js.Unsafe.set (Js.Unsafe.variable "self")
                       (Js.string "onmessage") onmessage
 
 (** Set this to match the OCaml function *)
-let _ = Js.Unsafe.set js_handler (Js.string "interpret")
+let _ = Js.Unsafe.set js_handler (Js.string "compile")
                       (Js.wrap_callback
                          (fun s ->
                            (Js.string
-                              (json_string_of_webresponse (js_interpret s)))))
+                              (string_of_json_mach
+                                 (json_of_jsresponse (js_compile s))))))
+                           (* Json.output (js_interpret s))) *)
+                           (* Json.output (0, "bakow"))) *)

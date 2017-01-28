@@ -163,23 +163,47 @@ TreeNode.prototype._drawSelf = function(ctx) {
     let offset_x = this._width / 2 - this._textWidth / 2;
     for (let x of this._body) {
 	if (Number.isInteger(x)) {
-	    ctx.fillStyle = "gray";
-	    // draw link to child indexed by x
-	    ctx.fillRect(offset_x, -LINK_CONNECTOR_SIZE / 2.5,
-			 LINK_CONNECTOR_SIZE, LINK_CONNECTOR_SIZE);
-	    // ctx.lineWidth = 1;
-	    ctx.strokeStyle = "rgba(0, 0, 0, 0.25)";
+	    // draw line to child
+	    if (this._active) {
+		ctx.strokeStyle = "rgba(255, 0, 0, 0.25)";
+	    }
+	    else {
+		ctx.strokeStyle = "rgba(0, 0, 0, 0.25)";
+	    }
 	    let childPos = this._children[x].getPosition();
 	    let childWidth = this._children[x].getWidth();
 	    let childHeight = this._children[x].getHeight();
 	    ctx.beginPath();
-	    ctx.moveTo(offset_x + LINK_CONNECTOR_SIZE / 2, 0);
+	    ctx.moveTo(offset_x + LINK_CONNECTOR_SIZE / 2, LINK_CONNECTOR_SIZE / 4);
 	    ctx.lineTo(childPos.x + childWidth / 2,
 		       childPos.y - childHeight / 2);
 	    ctx.stroke();
+
+	    // if (this._active) {
+	    // 	ctx.fillStyle = "darkred";
+	    // }
+	    // else {
+	    // 	ctx.fillStyle = "darkgreen";
+	    // }
+	    ctx.fillStyle = "black";
+	    
+	    // draw link to child indexed by x
+	    // ctx.fillRect(offset_x, -LINK_CONNECTOR_SIZE / 4,
+	    // 		 LINK_CONNECTOR_SIZE, LINK_CONNECTOR_SIZE);
+	    
+	    ctx.beginPath();
+	    ctx.arc(offset_x + LINK_CONNECTOR_SIZE / 2,
+	    	    LINK_CONNECTOR_SIZE / 4,
+	    	    LINK_CONNECTOR_SIZE / 2, 0, Math.PI, true);
+	    ctx.arc(offset_x + LINK_CONNECTOR_SIZE / 2,
+	    	    LINK_CONNECTOR_SIZE / 4,
+	    	    LINK_CONNECTOR_SIZE / 2, Math.PI, 0, true);
+	    ctx.fill();
+	    
 	    offset_x += LINK_CONNECTOR_SIZE;
 	}
 	else {
+	    ctx.fillStyle = "black";
 	    // draw atom string
 	    ctx.fillText(x, offset_x, textHeight / 2.5);
 	    offset_x += this._puddi.getCtx().measureText(x).width;
@@ -374,11 +398,25 @@ var tokenRenderer = null; // create in init()
 var astRenderer = null; // create in init()
 var activeRenderer = null; // keep track of renderer currently being used
 var compiling = false;
+var isDragging = false;
+var enablePlusMinusScale = true;
 
 function setOutput(outp) {
     let output = ace.edit("output");
     output.setValue(outp);
     output.session.selection.clearSelection();
+}
+
+function setRtl(rtl) {
+    let rtlEditor = ace.edit("rtleditor");
+    rtlEditor.setValue(rtl);
+    rtlEditor.session.selection.clearSelection();
+}
+
+function setLlvm(llvm) {
+    let llvmEditor = ace.edit("llvmeditor");
+    llvmEditor.setValue(llvm);
+    llvmEditor.session.selection.clearSelection();
 }
 
 function cancelTimeout() {
@@ -504,6 +542,8 @@ function compile() {
 	else {
 	    $("#output .ace_content").css("color", "black");
 	    setOutput(responseObject.output);
+	    setRtl(responseObject.rtl);
+	    setLlvm(responseObject.llvm);
 	    // setOutput(JSON.stringify(responseObject.ast));
 	    tokenRenderer.addTokens(responseObject.tokens);
 	    tokenRenderer.positionTokens();
@@ -559,6 +599,8 @@ function rescale() {
     // give tabs the remaining width
     $("#tabs").css("width", w - editor_width);
     $("#output").css("width", w - editor_width - 45);
+    $("#rtleditor").css("width", w - editor_width - 45);
+    $("#llvmeditor").css("width", w - editor_width - 45);
 
     $("#maintdleft").css("width", editor_width);
     $("#maintdright").css("width", w - editor_width);
@@ -577,6 +619,8 @@ function rescale() {
     tokensCanvas.height = h - tabListHeight;
     astCanvas.height = h - tabListHeight;
     $("#output").css("height", h - tabListHeight + 5);
+    $("#rtleditor").css("height", h - tabListHeight + 5);
+    $("#llvmeditor").css("height", h - tabListHeight + 5);
     $("#editor").css("height", h - 40);
 
     // refresh editor
@@ -725,6 +769,13 @@ function init() {
 	$("#feedback").text("Code changed. Token/AST highlighting disabled.");
     });
 
+    editor.on('focus', function() {
+	enablePlusMinusScale = false;
+    });
+    editor.on('blur', function() {
+	enablePlusMinusScale = true;
+    });
+
     let output = ace.edit("output");
     output.setTheme("ace/theme/iplastic");
     output.session.setUseWorker(false);
@@ -754,6 +805,36 @@ function init() {
 	decreaseFontSize(output);
     });
     
+    let rtlEditor = ace.edit("rtleditor");
+    rtlEditor.session.setMode("ace/mode/assembly_x86");
+    rtlEditor.setTheme("ace/theme/iplastic");
+    rtlEditor.session.setUseWorker(false);
+    rtlEditor.setReadOnly(true);
+    rtlEditor.setOption("showPrintMargin", false)
+    rtlEditor.renderer.setShowGutter(false);
+
+    $("#rtlplusbutton").click(function() {
+	increaseFontSize(rtlEditor);
+    });
+    $("#rtlminusbutton").click(function() {
+	decreaseFontSize(rtlEditor);
+    });
+
+    let llvmEditor = ace.edit("llvmeditor");
+    llvmEditor.session.setMode("ace/mode/assembly_x86");
+    llvmEditor.setTheme("ace/theme/iplastic");
+    llvmEditor.session.setUseWorker(false);
+    llvmEditor.setReadOnly(true);
+    llvmEditor.setOption("showPrintMargin", false)
+    llvmEditor.renderer.setShowGutter(false);
+
+    $("#llvmplusbutton").click(function() {
+	increaseFontSize(llvmEditor);
+    });
+    $("#llvmminusbutton").click(function() {
+	decreaseFontSize(llvmEditor);
+    });
+
     // set up token renderer
     let tokensCanvas = document.getElementById("tokenscanvas");
     tokenRenderer = new TokenRenderer(tokensCanvas, editor);
@@ -873,13 +954,13 @@ document.addEventListener('keydown', function(e) {
 	break;
     case 173: // - in firefox
     case 189: // - in chrome
-	if (activeRenderer) {
+	if (activeRenderer && enablePlusMinusScale) {
 	    activeRenderer.scale(0.9);
 	}
 	break;
     case 61: // + in firefox
     case 187: // + in chrome
-	if (activeRenderer) {
+	if (activeRenderer && enablePlusMinusScale) {
 	    activeRenderer.scale(1.1);
 	}
 	break;

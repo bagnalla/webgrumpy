@@ -286,6 +286,8 @@ AstRenderer.prototype.reset = function() {
 }
 
 AstRenderer.prototype.mousemove = function(pos) {
+    if (!this._ast) { return; }
+
     let scale = this._puddi.getScale();
     let scaleInv = 1 / scale;
     pos.x *= scaleInv;
@@ -699,6 +701,15 @@ function scrollDown(evt) {
     }
 }
 
+function handleMouseWheel(e) {
+    var delta = e.wheelDelta || -e.detail;
+    if (delta < 0) {
+	activeRenderer.scale(0.9);
+    }
+    else {
+	activeRenderer.scale(1.1);
+    }
+}
 
 // set up editors, canvases, and renderers
 function init() {
@@ -746,15 +757,19 @@ function init() {
     // set up token renderer
     let tokensCanvas = document.getElementById("tokenscanvas");
     tokenRenderer = new TokenRenderer(tokensCanvas, editor);
-    // tokensCanvas.addEventListener('click', function(evt) {
-    // 	let pos = getMousePos(tokensCanvas, evt);
-    // 	tokenRenderer.click(pos);
-    // }, false);
+
     tokensCanvas.addEventListener('mousemove', function(evt) {
 	let pos = getMousePos(tokensCanvas, evt);
 	tokenRenderer.mousemove(pos);
+	if (isDragging) {
+	    tokenRenderer.translate(new Vector(evt.movementX, evt.movementY));
+	}
     }, false);
-
+    tokensCanvas.addEventListener('mousedown', function(evt) {
+	isDragging = true;
+    }, false);
+    tokensCanvas.addEventListener('mousewheel', handleMouseWheel, false);
+    tokensCanvas.addEventListener('DOMMouseScroll', handleMouseWheel, false);
 
     $("#tokensplusbutton").click(function() {
 	tokenRenderer.scale(1.1);
@@ -773,14 +788,19 @@ function init() {
     // set up ast renderer
     let astCanvas = document.getElementById("astcanvas");
     astRenderer = new AstRenderer(astCanvas, editor);
-    // astCanvas.addEventListener('click', function(evt) {
-    // 	let pos = getMousePos(astCanvas, evt);
-    // 	astRenderer.click(pos);
-    // }, false);
+
     astCanvas.addEventListener('mousemove', function(evt) {
 	let pos = getMousePos(astCanvas, evt);
 	astRenderer.mousemove(pos);
+	if (isDragging) {
+	    astRenderer.translate(new Vector(evt.movementX, evt.movementY));
+	}
     }, false);
+    astCanvas.addEventListener('mousedown', function(evt) {
+	isDragging = true;
+    }, false);
+    astCanvas.addEventListener('mousewheel', handleMouseWheel, false);
+    astCanvas.addEventListener('DOMMouseScroll', handleMouseWheel, false);
 
     $("#astplusbutton").click(function() {
 	astRenderer.scale(1.1);
@@ -803,6 +823,9 @@ function init() {
 	scrollUp();
     });
 
+    $(window).mouseup(function(){
+	isDragging = false;
+    });
 
     startEdit();
 }
@@ -848,12 +871,14 @@ document.addEventListener('keydown', function(e) {
 	    activeRenderer.softReset();
 	}
 	break;
-    case 173: // -
+    case 173: // - in firefox
+    case 189: // - in chrome
 	if (activeRenderer) {
 	    activeRenderer.scale(0.9);
 	}
 	break;
-    case 61: // +
+    case 61: // + in firefox
+    case 187: // + in chrome
 	if (activeRenderer) {
 	    activeRenderer.scale(1.1);
 	}

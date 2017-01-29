@@ -402,9 +402,18 @@ var isDragging = false;
 var enablePlusMinusScale = true;
 
 function setOutput(outp) {
+    $("#output .ace_content").css("color", "black");
     let output = ace.edit("output");
     output.setValue(outp);
     output.session.selection.clearSelection();
+}
+
+function setError(err) {
+    $("#output .ace_content").css("color", "rgb(225,0,0)");
+    let output = ace.edit("output");
+    output.setValue(err);
+    output.session.selection.clearSelection();
+    $("#feedback").text("Error");
 }
 
 function setRtl(rtl) {
@@ -439,7 +448,8 @@ function createWorker() {
     }
     worker.onerror = function(event){
 	cancelTimeout();
-	setOutput("Grumpy exception: " + event.message);
+	setError("Grumpy exception: " + event.message);
+	startEdit();
     };
     return worker;
 }
@@ -535,12 +545,10 @@ function compile() {
 	let responseObject = JSON.parse(response);
 	console.log(responseObject);
 	if (responseObject.error) {
-	    $("#output .ace_content").css("color", "rgb(225,0,0)");
-	    setOutput(responseObject.error);
+	    setError(responseObject.error);
 	    startEdit();
 	}
 	else {
-	    $("#output .ace_content").css("color", "black");
 	    setOutput(responseObject.output);
 	    setRtl(responseObject.rtl);
 	    setLlvm(responseObject.llvm);

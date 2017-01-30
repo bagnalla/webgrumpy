@@ -2692,20 +2692,22 @@ Token.prototype._drawSelf = function(ctx) {
     let textWidth = ctx.measureText(this._value).width;
     let textHeight = 10; // get font size from ctx
     ctx.fillStyle = "white";
-    ctx.fillRect(0, -this._height / 2, this._width, this._height);
-    ctx.strokeRect(0, -this._height / 2, this._width, this._height);
+    ctx.fillRect(0, -this._height, this._width, this._height);
+    ctx.strokeRect(0, -this._height, this._width, this._height);
     if (this._active) {
 	ctx.fillStyle = "rgba(100,200,100,0.4)";
-	ctx.fillRect(0, -this._height / 2, this._width, this._height);
+	ctx.fillRect(0, -this._height, this._width, this._height);
     }
     ctx.fillStyle = "black";
     ctx.fillText(this._value, this._width / 2 - textWidth / 2,
-		 textHeight / 2.5);
+		 -this._height / 2 + textHeight / 3);
 };
 
 ////////////////////
 // TOKEN RENDERER
 ////////////////////
+
+var Y_POS = 10;
 
 var TokenRenderer = function(canvas, editor) {
     this._ctx = canvas.getContext('2d');
@@ -2715,11 +2717,16 @@ var TokenRenderer = function(canvas, editor) {
     this._editor = editor;
     this._tokens = [];
     this._highlightEnabled = true;
+    this._initPosition();
 }
 
 // set up inheritance
 TokenRenderer.prototype = Object.create(Drawable.prototype);
 TokenRenderer.prototype.constructor = TokenRenderer;
+
+TokenRenderer.prototype._initPosition = function() {
+    this.setPosition(new Vector(0, Y_POS + 2));
+}
 
 TokenRenderer.prototype.setHighlightEnabled = function(e) {
     this._highlightEnabled = e;
@@ -2734,9 +2741,9 @@ TokenRenderer.prototype.resume = TokenRenderer.prototype.run;
 TokenRenderer.prototype.translate = function(t) {
     // restrict translation
     t.x = 0;
-    if (this._position.y + t.y >= 0) {
-	console.log(this._position.y + " " + t.y);
-	this.setPosition(new Vector(this._position.x, 0));
+    let y_bound = Y_POS * (1 / this._puddi.getScale()) + 2;
+    if (this._position.y + t.y * (1 / this._puddi.getScale()) >= y_bound) {
+	this.setPosition(new Vector(this._position.x, y_bound));
     }
     else {
 	Object.getPrototypeOf(Drawable.prototype).translate.call(this,
@@ -2773,7 +2780,7 @@ TokenRenderer.prototype.clear = function() {
 
 TokenRenderer.prototype.softReset = function() {
     this._puddi.clearTransform();
-    this.setPosition(new Vector(0, 0));
+    this._initPosition();
 }
 
 TokenRenderer.prototype.reset = function() {

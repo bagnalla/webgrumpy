@@ -2817,8 +2817,8 @@ TokenRenderer.prototype.mousemove = function(pos) {
 	
 	if (pos.x >= tpos.x &&
 	    pos.x <= tpos.x + tok.getWidth() &&
-	    pos.y >= tpos.y - tok.getHeight() / 2 &&
-	    pos.y <= tpos.y + tok.getHeight() / 2) {
+	    pos.y >= tpos.y - tok.getHeight() &&
+	    pos.y <= tpos.y) {
 	    mousedOver = tok;
 	    break;
 	}

@@ -246,6 +246,7 @@ AstRenderer.prototype.translate = function(t) {
 AstRenderer.prototype.scale = function(s) {
     this._puddi.scaleTranslated(s);
     this.refresh();
+    console.log("ast renderer scale: " + this._puddi.getScale());
 };
 
 AstRenderer.prototype.refresh = function() {
@@ -269,19 +270,24 @@ AstRenderer.prototype.initScale = function() {
     if (this._ast) {
 	let treeWidth = this._ast.getTreeWidth();
 	let treeHeight = this._ast.getTreeHeight();
-	console.log("treeWidth: " + treeWidth);
-	console.log("treeHeight: " + treeHeight);
 
 	let x_ratio = this._canvas.width / treeWidth;
 	let y_ratio = this._canvas.height / treeHeight;
 
+	// console.log("treeWidth: " + treeWidth);
+	// console.log("treeHeight: " + treeHeight);
+	// console.log("canvas width: " + this._canvas.width);
+	// console.log("canvas height: " + this._canvas.height);
+	// console.log("x ratio: " + this._canvas.width / treeWidth);
+	// console.log("y ratio: " + this._canvas.height / treeHeight);
+
 	if (x_ratio < y_ratio) {
 	    console.log("scaling by x. ratio: " + x_ratio);
-	    this.scale(x_ratio);
+	    this.scale(Math.min(x_ratio * 0.9, 1.5));
 	}
 	else {
 	    console.log("scaling by y. ratio: " + y_ratio);
-	    this.scale(Math.min(y_ratio, 1.5));
+	    this.scale(Math.min(y_ratio * 0.9, 1.5));
 	}
     }
 }
@@ -767,8 +773,9 @@ function handleMouseWheel(e) {
 function init() {
     let editor = ace.edit("editor");
     editor.setTheme("ace/theme/chrome");
-    editor.session.setMode("ace/mode/javascript");
+    editor.session.setMode("ace/mode/c_cpp");
     editor.session.setUseWorker(false);
+    editor.setOption("fontSize", 14);
     editor.setOption("showPrintMargin", false)
 
     editor.on('change', function() {
@@ -788,6 +795,7 @@ function init() {
     output.setTheme("ace/theme/iplastic");
     output.session.setUseWorker(false);
     output.setReadOnly(true);
+    output.setOption("fontSize", 14);
     output.setOption("showPrintMargin", false)
     output.renderer.setShowGutter(false);
 
@@ -818,6 +826,7 @@ function init() {
     rtlEditor.setTheme("ace/theme/iplastic");
     rtlEditor.session.setUseWorker(false);
     rtlEditor.setReadOnly(true);
+    rtlEditor.setOption("fontSize", 14);
     rtlEditor.setOption("showPrintMargin", false)
     rtlEditor.renderer.setShowGutter(false);
 
@@ -833,6 +842,7 @@ function init() {
     llvmEditor.setTheme("ace/theme/iplastic");
     llvmEditor.session.setUseWorker(false);
     llvmEditor.setReadOnly(true);
+    llvmEditor.setOption("fontSize", 14);
     llvmEditor.setOption("showPrintMargin", false)
     llvmEditor.renderer.setShowGutter(false);
 
@@ -2656,6 +2666,7 @@ var Range = ace.require('ace/range').Range;
 
 var MIN_TOKEN_WIDTH = 25;
 var MIN_TOKEN_HEIGHT = 25;
+var INIT_SCALE = 1.16;
 
 var Token = function(puddi, parent, value,
 		     start_lnum, start_cnum,
@@ -2755,6 +2766,7 @@ TokenRenderer.prototype.translate = function(t) {
 TokenRenderer.prototype.scale = function(s) {
     this._puddi.scale(s);
     this.refresh();
+    console.log("token renderer scale: " + this._puddi.getScale());
 };
 
 TokenRenderer.prototype.refresh = function() {
@@ -2781,11 +2793,13 @@ TokenRenderer.prototype.clear = function() {
 TokenRenderer.prototype.softReset = function() {
     this._puddi.clearTransform();
     this._initPosition();
+    this.scale(INIT_SCALE);
 }
 
 TokenRenderer.prototype.reset = function() {
     this.clear();
     this._puddi.clearTransform();
+    this.scale(INIT_SCALE);
 }
 
 TokenRenderer.prototype.positionTokens = function() {
@@ -2817,8 +2831,8 @@ TokenRenderer.prototype.mousemove = function(pos) {
 	
 	if (pos.x >= tpos.x &&
 	    pos.x <= tpos.x + tok.getWidth() &&
-	    pos.y >= tpos.y - tok.getHeight() / 2 &&
-	    pos.y <= tpos.y + tok.getHeight() / 2) {
+	    pos.y >= tpos.y - tok.getHeight() &&
+	    pos.y <= tpos.y) {
 	    mousedOver = tok;
 	    break;
 	}

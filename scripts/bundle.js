@@ -2770,7 +2770,7 @@ TokenRenderer.prototype.scale = function(s) {
 };
 
 TokenRenderer.prototype.refresh = function() {
-    // this._puddi.refresh();
+    this._puddi.refresh();
     this.positionTokens();
 }
 

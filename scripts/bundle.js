@@ -419,7 +419,7 @@ function setError(err) {
     let output = ace.edit("output");
     output.setValue(err);
     output.session.selection.clearSelection();
-    $("#feedback").text("Error");
+    $("#feedback").text("Error. See output.");
 }
 
 function setRtl(rtl) {
@@ -474,6 +474,7 @@ function cancelWorker () {
     worker.terminate();
     worker = undefined;
     worker = createWorker();
+    $("#feedback").text("Cancelled.");
 }
 
 // ui transition to editing

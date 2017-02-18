@@ -121,6 +121,7 @@ let rec vistree_of_exp e =
   | ECall (id, es) ->
      VTList (vistree_info_of_exp e,
              (VTAtom ("ECall(" ^ string_of_id id) ::
+                (if BatList.is_empty es then [] else [VTAtom ", "]) @
                 (intersperse (BatList.map vistree_of_exp es) (VTAtom ", "))
               @ [VTAtom ")"]))
   | ERef e ->
@@ -168,7 +169,7 @@ let vistree_of_prog p =
   VTList ((-1, -1, -1, -1),
           (if not (BatList.is_empty p.fundefs) then ([VTAtom "fundefs: ["] @
             (intersperse (BatList.map vistree_of_fundef p.fundefs)
-               (VTAtom ", ")) @ [VTAtom "]m "]) else
+               (VTAtom ", ")) @ [VTAtom "] "]) else
             []) @ [VTAtom "result: "; vistree_of_exp p.result])
 
 (**********************)

@@ -1,8 +1,10 @@
 open BatFormat
 open Lexing
+open Exp
 open AST
 open Tycheck
 open Ssa
+open Llvm
 open Simplejson
 open Grumpyjsutil
 
@@ -32,13 +34,25 @@ let js_compile s =
       let p = Parser.prog Lexer.token lexbuf in
       let p_tychecked = tycheck_prog p in
       let p_rtl = ssa_of_prog p_tychecked in
+      let p_llvm = llvm_of_prog p_rtl in
       let v = if interpFlag then ssa_interp p_rtl else VUnit in
 
       (* get output string *)
       let output = BatIO.close_out outs in
+
+      let rtl_outs = BatIO.output_string () in
+      let rtl_ppf = formatter_of_output rtl_outs in
+      pp_prog rtl_ppf pp_instrs pp_ty pp_nl p_rtl;
+      let rtl_string = BatIO.close_out rtl_outs in
+
+      let llvm_outs = BatIO.output_string () in
+      let llvm_ppf = formatter_of_output llvm_outs in
+      pp_lprog llvm_ppf p_tychecked.result.ety_of p_llvm;
+      let llvm_string = BatIO.close_out llvm_outs in
+
       JRSuccess (output ^ "\nResult: " ^ (string_of_value v) ^ "\n", v,
                  BatList.rev (get_tokens ()), vistree_of_prog p_tychecked,
-                 TDStub, "\n", "\n");
+                 TDStub, rtl_string, llvm_string);
     with
     | Parser.Error ->
        JRError ("Syntax error: " ^ (print_pos lexbuf) ^ "\n")
